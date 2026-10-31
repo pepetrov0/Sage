@@ -14,7 +14,7 @@ The next talent to learn, always in sight.
 - 🎯 **Next talent at a glance**: icon, name and the rank you are about to learn
 - 🔮 **Glyph recommendations**: once your talent points are spent and a glyph socket is empty, a second card shows the next glyph from your spec's priority list (Retribution, Holy and Protection paladin so far)
 - 🪟 **Out of the way**: it only appears below the talent window, and never in combat
-- 🧭 **Asks which build you want** at level 10 and after a talent reset, and remembers it per talent group (dual spec). Close it without picking and it asks again the next time you open the talent window, up to 3 times. Until you pick one, you go your own way (no suggestions)
+- 🧭 **Asks which build you want** at level 10 and after a talent reset, and remembers it per talent group (dual spec). It has no close button: it stays up whenever the talent window is open until you pick a build or "My own way". Until you pick one, you go your own way (no suggestions)
 - 🪶 **Featherweight**: a few small Lua files (the core, an optional ElvUI skin and the build data), no dependencies
 
 ## Installation
@@ -28,7 +28,7 @@ Sage targets the WoW 3.3.5a client (interface `30300`).
 
 | Command | Description |
 | --- | --- |
-| `/sage` | Open the build dialog, if it did not come up by itself |
+| `/sage` | Open the talent window with the build dialog, to change your build |
 
 `/sg` is a short alias for `/sage`.
 

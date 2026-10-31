@@ -44,7 +44,6 @@ local function LogLoad(hint) Print("v" .. ADDON_VERSION .. " loaded." .. (hint a
 ---------------------------------------------------------------------------
 local defaults = {
     builds = {}, -- the chosen build name per talent group (dual spec)
-    dismissed = {}, -- per talent group: how often the choice dialog was closed without a pick
 }
 
 local function CopyDefaults(src, dst)
@@ -176,14 +175,6 @@ end
 
 StaticPopupDialogs["SAGE_OWN_WAY"] = {
     text = "|cff33ff99Sage|r\n\n%s is not in the %s build, so you are on your own now.\n\nReset your talents to follow a build again.\n",
-    button1 = OKAY,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-}
-
-StaticPopupDialogs["SAGE_NO_MORE_ASKS"] = {
-    text = "|cff33ff99Sage|r\n\nSage will no longer ask which build you want, so you are on your own.\n\nReset your talents to be asked again.\n",
     button1 = OKAY,
     timeout = 0,
     whileDead = true,
@@ -487,9 +478,6 @@ end
 -- Choice: asks which build to follow
 ---------------------------------------------------------------------------
 local MIN_LEVEL = 10 -- the first talent point
-local MAX_ASKS = 3 -- closed this often without a pick, the dialog stops asking until a talent reset
-local closedGroup -- the talent group whose dialog was closed while the talent window is open; asked again when it reopens
-local hidingAuto -- the dialog is being closed by us (combat, window closed), which is not a dismissal
 local lastSpent = {} -- points spent per talent group at the last check, to spot a reset
 local lastGroup -- the talent group seen at the last check, to spot a dual spec switch
 local askedGroup -- the talent group the open dialog is asking for
@@ -511,14 +499,7 @@ choice:SetBackdrop({
 choice:SetBackdropColor(0, 0, 0, 0.9)
 choice:Hide()
 choice.options = {}
-tinsert(UISpecialFrames, "SageChoice") -- Escape closes it
-choice:SetScript("OnHide", function()
-    if hidingAuto or not askedGroup then return end
-    local times = (db.dismissed[askedGroup] or 0) + 1
-    db.dismissed[askedGroup] = times
-    closedGroup = askedGroup
-    if times >= MAX_ASKS then StaticPopup_Show("SAGE_NO_MORE_ASKS") end
-end)
+-- No close button and no Escape: it stays up while the talent window is open, until a pick.
 
 local title = choice:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 title:SetPoint("TOP", 0, -CHOICE_PADDING)
@@ -528,19 +509,13 @@ local subtitle = choice:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall
 subtitle:SetPoint("TOP", title, "BOTTOM", 0, -4)
 subtitle:SetText("Choose your specialization and I will guide your talents, or go your own way.")
 
-choice.close = CreateFrame("Button", nil, choice, "UIPanelCloseButton")
-choice.close:SetPoint("TOPRIGHT", -2, -2)
-
 local function HideChoice()
-    if not choice:IsShown() then return end
-    hidingAuto = true
     choice:Hide()
-    hidingAuto = false
 end
 
 local function OnChoose(self)
     db.builds[askedGroup or Group()] = self.value
-    HideChoice() -- a pick, not a dismissal
+    HideChoice()
     Print(self.value == OWN_WAY and "no suggestions, you go your own way." or ("build set to " .. self.build .. "."))
     CheckDeviation()
     Refresh()
@@ -595,8 +570,7 @@ local function ShowChoice()
 end
 
 local function MaybeAsk()
-    local group = Group()
-    if closedGroup == group or (db.dismissed[group] or 0) >= MAX_ASKS or choice:IsShown() or not Available() then return end
+    if choice:IsShown() or not Available() then return end
     if not ns.builds[MY_CLASS] or UnitLevel("player") < MIN_LEVEL or Pick() then return end
     ShowChoice()
 end
@@ -613,7 +587,6 @@ local function CheckReset()
     local allUnspent = (UnitCharacterPoints("player") or 0) >= UnitLevel("player") - 9
     if lastSpent[group] and lastSpent[group] > 0 and total == 0 and allUnspent then
         db.builds[group] = nil
-        db.dismissed[group] = nil
     end
     if total > 0 or allUnspent then lastSpent[group] = total end
 end
@@ -668,7 +641,6 @@ local function Attach()
         MaybeAsk()
     end)
     talentFrame:HookScript("OnHide", function()
-        closedGroup = nil
         Refresh()
         HideChoice()
     end)
@@ -693,7 +665,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
             SageDB = SageDB or {}
             db = SageDB
             CopyDefaults(defaults, db)
-            db.enabled, db.chatLog = nil, nil -- settings of older versions
+            db.enabled, db.chatLog, db.dismissed = nil, nil, nil -- settings of older versions
         elseif arg1 == "Blizzard_TalentUI" then
             Attach()
         end
@@ -706,7 +678,6 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         Skin("panel", glyphFrame)
         Skin("icon", glyphFrame.icon)
         Skin("panel", choice)
-        Skin("close", choice.close)
         Refresh()
         MaybeAsk()
         readyTimer.left = READY_FALLBACK
@@ -732,7 +703,8 @@ end)
 ---------------------------------------------------------------------------
 -- Slash
 ---------------------------------------------------------------------------
--- A fallback for when the dialog does not come up by itself (closed too often, a missed reset).
+-- Opens the build dialog to change the build. The dialog has no close button, so the talent window
+-- opens with it: closing the window is the way out without a pick.
 SLASH_SAGE1 = "/sage"
 SLASH_SAGE2 = "/sg"
 SlashCmdList["SAGE"] = function()
@@ -742,9 +714,8 @@ SlashCmdList["SAGE"] = function()
         Print("talents start at level " .. MIN_LEVEL .. ".")
     elseif inCombat then
         Print("not in combat.")
-    elseif not choice:IsShown() then
-        db.dismissed[Group()] = nil -- asked for, so the dialog asks again as usual
-        closedGroup = nil
-        ShowChoice()
+    else
+        if not (talentFrame and talentFrame:IsShown()) then ToggleTalentFrame() end
+        if not choice:IsShown() then ShowChoice() end
     end
 end
