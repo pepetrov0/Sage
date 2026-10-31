@@ -11,7 +11,8 @@
 
      At level 10 and above, with the talent window open and out of combat, it
      asks which build you want if you have not picked one, and asks again
-     after you reset your talents. Dual spec: each talent group has its own pick.
+     after you reset your talents. Dual spec: each talent group has its own pick, so switching
+     groups follows that group's build, or asks (with the talent window open) if it has none.
 
      /sage status   show what it is doing
      /sage on|off   enable or disable
@@ -393,9 +394,11 @@ end
 -- Choice: asks which build to follow
 ---------------------------------------------------------------------------
 local MIN_LEVEL = 10 -- the first talent point
-local dismissed -- closed without choosing; asked again after a talent reset or the next login
+local dismissed = {} -- per talent group: closed without choosing; asked again after a talent reset or the next login
 local hidingAuto -- the dialog is being closed by us (combat, window closed), which is not a dismissal
 local lastSpent = {} -- points spent per talent group at the last check, to spot a reset
+local lastGroup -- the talent group seen at the last check, to spot a dual spec switch
+local askedGroup -- the talent group the open dialog is asking for
 
 local CHOICE_PADDING = 14
 local OPTION_W, OPTION_H, OPTION_GAP = 90, 90, 10
@@ -415,7 +418,7 @@ choice:SetBackdropColor(0, 0, 0, 0.9)
 choice:Hide()
 choice.options = {}
 tinsert(UISpecialFrames, "SageChoice") -- Escape closes it
-choice:SetScript("OnHide", function() if not hidingAuto then dismissed = true end end)
+choice:SetScript("OnHide", function() if not hidingAuto and askedGroup then dismissed[askedGroup] = true end end)
 
 local title = choice:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 title:SetPoint("TOP", 0, -CHOICE_PADDING)
@@ -429,7 +432,7 @@ choice.close = CreateFrame("Button", nil, choice, "UIPanelCloseButton")
 choice.close:SetPoint("TOPRIGHT", -2, -2)
 
 local function OnChoose(self)
-    db.builds[Group()] = self.value
+    db.builds[askedGroup or Group()] = self.value
     choice:Hide()
     Refresh()
     Print(self.value == OWN_WAY and "no suggestions, you go your own way." or ("build set to " .. self.build .. "."))
@@ -479,6 +482,7 @@ local function ShowChoice()
     local dialogWidth = max(width, 340) + 2 * CHOICE_PADDING
     subtitle:SetWidth(dialogWidth - 2 * CHOICE_PADDING)
     choice:SetSize(dialogWidth, 80 + OPTION_H + CHOICE_PADDING)
+    askedGroup = Group()
     choice:Show()
 end
 
@@ -490,24 +494,41 @@ local function HideChoice()
 end
 
 local function MaybeAsk()
-    if dismissed or choice:IsShown() or not Available() then return end
+    if dismissed[Group()] or choice:IsShown() or not Available() then return end
     if not ns.builds[MY_CLASS] or UnitLevel("player") < MIN_LEVEL or db.builds[Group()] then return end
     ShowChoice()
 end
 
--- A talent group that had points and now has none was reset (or swapped for an empty one):
--- forget its build so the player is asked again.
+-- A talent group that had points and now has none was reset: forget its build so the player is
+-- asked again. Talent data can read as empty for a moment (zoning, a dual spec switch), so it only
+-- counts when every point the character has earned (one per level from 10) is unspent again.
 local function CheckReset()
     local group, total = Group(), 0
     for i = 1, GetNumTalentTabs() do
-        local _, _, points = GetTalentTabInfo(i)
-        total = total + points
+        local _, _, points = GetTalentTabInfo(i, false, false, group)
+        total = total + (points or 0)
     end
-    if lastSpent[group] and lastSpent[group] > 0 and total == 0 then
+    local allUnspent = (UnitCharacterPoints("player") or 0) >= UnitLevel("player") - 9
+    if lastSpent[group] and lastSpent[group] > 0 and total == 0 and allUnspent then
         db.builds[group] = nil
-        dismissed = false
+        dismissed[group] = false
     end
-    lastSpent[group] = total
+    if total > 0 or allUnspent then lastSpent[group] = total end
+end
+
+-- A dual spec switch: the dialog asked for the other group, so it goes; the new group's build is
+-- announced, or it is asked for (MaybeAsk, after this).
+local function CheckGroup()
+    local group = Group()
+    if group == lastGroup then return end
+    local first = lastGroup == nil
+    lastGroup = group
+    if first then return end -- login, nothing was switched
+    HideChoice()
+    local pick = db.builds[group]
+    local build = pick and pick ~= OWN_WAY and FindBuild(pick)
+    Log("talent group " .. group .. ": " .. (pick == OWN_WAY and "your own way, no suggestions"
+        or build and ("build " .. build.name) or "no build chosen yet"))
 end
 
 ---------------------------------------------------------------------------
@@ -533,6 +554,7 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
 frame:RegisterEvent("CHARACTER_POINTS_CHANGED")
 frame:RegisterEvent("PLAYER_TALENT_UPDATE")
+frame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("GLYPH_ADDED")
@@ -558,6 +580,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         Skin("icon", glyphFrame.icon)
         Skin("panel", choice)
         Skin("close", choice.close)
+        CheckGroup()
         CheckReset()
         Refresh()
         MaybeAsk()
@@ -567,6 +590,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     else
         if event == "PLAYER_REGEN_DISABLED" then inCombat = true end
         if event == "PLAYER_REGEN_ENABLED" then inCombat = false end
+        CheckGroup()
         CheckReset()
         Refresh()
         if inCombat then HideChoice() else MaybeAsk() end
