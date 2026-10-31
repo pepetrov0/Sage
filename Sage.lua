@@ -662,6 +662,8 @@ local function Attach()
     frame:SetParent(talentFrame)
     glyphFrame:SetParent(talentFrame) -- both cards take the window's strata and level and hide with it
     talentFrame:HookScript("OnShow", function()
+        -- talent data can settle after the last talent event (a reset's unspent points), so check again
+        if talentsReady then CheckTalents() end
         Refresh()
         MaybeAsk()
     end)
