@@ -1,0 +1,11 @@
+## Interface: 30300
+## Title: Sage
+## Notes: Suggests the next talent to learn when you have unspent points. Use /sage.
+## Author: Petar Petrov
+## Version: 0.1.0
+## SavedVariablesPerCharacter: SageDB
+## OptionalDeps: ElvUI
+
+Sage.lua
+Skin.lua
+Builds\PALADIN_Retribution.lua
