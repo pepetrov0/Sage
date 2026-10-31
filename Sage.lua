@@ -12,13 +12,14 @@
 
      At level 10 and above, with the talent window open and out of combat, it
      asks which build you want if you have not picked one, and asks again
-     after you reset your talents. Dual spec: each talent group has its own pick, so switching
-     groups follows that group's build, or asks (with the talent window open) if it has none.
+     after you reset your talents. Closed without a pick, it asks again the next time the
+     window opens, up to 3 times; then it says it will stop asking until a talent reset.
+     Dual spec: each talent group has its own pick, so switching groups follows that group's
+     build, or asks (with the talent window open) if it has none.
 
-     /sage (or /sg) build    list the builds for your class, build <name> or build own picks one
-     /sage (or /sg) status   show what it is doing
+     There are no slash commands: the dialog picks the build.
 
-     File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events > Slash.
+     File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events.
      The ElvUI skin is in Skin.lua.
 ]]
 
@@ -43,6 +44,7 @@ local function LogLoad(hint) Print("v" .. ADDON_VERSION .. " loaded." .. (hint a
 ---------------------------------------------------------------------------
 local defaults = {
     builds = {}, -- the chosen build name per talent group (dual spec)
+    dismissed = {}, -- per talent group: how often the choice dialog was closed without a pick
 }
 
 local function CopyDefaults(src, dst)
@@ -174,6 +176,14 @@ end
 
 StaticPopupDialogs["SAGE_OWN_WAY"] = {
     text = "|cff33ff99Sage|r\n\n%s is not in the %s build, so you are on your own now.\n\nReset your talents to follow a build again.",
+    button1 = OKAY,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+StaticPopupDialogs["SAGE_NO_MORE_ASKS"] = {
+    text = "|cff33ff99Sage|r\n\nSage will no longer ask which build you want, so you are on your own.\n\nReset your talents to be asked again.",
     button1 = OKAY,
     timeout = 0,
     whileDead = true,
@@ -477,7 +487,8 @@ end
 -- Choice: asks which build to follow
 ---------------------------------------------------------------------------
 local MIN_LEVEL = 10 -- the first talent point
-local dismissed = {} -- per talent group: closed without choosing; asked again after a talent reset or the next login
+local MAX_ASKS = 3 -- closed this often without a pick, the dialog stops asking until a talent reset
+local closedGroup -- the talent group whose dialog was closed while the talent window is open; asked again when it reopens
 local hidingAuto -- the dialog is being closed by us (combat, window closed), which is not a dismissal
 local lastSpent = {} -- points spent per talent group at the last check, to spot a reset
 local lastGroup -- the talent group seen at the last check, to spot a dual spec switch
@@ -501,7 +512,13 @@ choice:SetBackdropColor(0, 0, 0, 0.9)
 choice:Hide()
 choice.options = {}
 tinsert(UISpecialFrames, "SageChoice") -- Escape closes it
-choice:SetScript("OnHide", function() if not hidingAuto and askedGroup then dismissed[askedGroup] = true end end)
+choice:SetScript("OnHide", function()
+    if hidingAuto or not askedGroup then return end
+    local times = (db.dismissed[askedGroup] or 0) + 1
+    db.dismissed[askedGroup] = times
+    closedGroup = askedGroup
+    if times >= MAX_ASKS then StaticPopup_Show("SAGE_NO_MORE_ASKS") end
+end)
 
 local title = choice:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 title:SetPoint("TOP", 0, -CHOICE_PADDING)
@@ -578,7 +595,8 @@ local function ShowChoice()
 end
 
 local function MaybeAsk()
-    if dismissed[Group()] or choice:IsShown() or not Available() then return end
+    local group = Group()
+    if closedGroup == group or (db.dismissed[group] or 0) >= MAX_ASKS or choice:IsShown() or not Available() then return end
     if not ns.builds[MY_CLASS] or UnitLevel("player") < MIN_LEVEL or Pick() then return end
     ShowChoice()
 end
@@ -595,7 +613,7 @@ local function CheckReset()
     local allUnspent = (UnitCharacterPoints("player") or 0) >= UnitLevel("player") - 9
     if lastSpent[group] and lastSpent[group] > 0 and total == 0 and allUnspent then
         db.builds[group] = nil
-        dismissed[group] = false
+        db.dismissed[group] = nil
     end
     if total > 0 or allUnspent then lastSpent[group] = total end
 end
@@ -648,6 +666,7 @@ local function Attach()
         MaybeAsk()
     end)
     talentFrame:HookScript("OnHide", function()
+        closedGroup = nil
         Refresh()
         HideChoice()
     end)
@@ -690,7 +709,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         MaybeAsk()
         readyTimer.left = READY_FALLBACK
         readyTimer:Show()
-        LogLoad("Open the talent window (N) for suggestions. /sage for commands.")
+        LogLoad("Open the talent window (N) for suggestions.")
     elseif event == "BAG_UPDATE" then
         if glyphFrame:IsShown() then bagTimer:Show() end -- see bagTimer
     elseif GLYPH_EVENTS[event] then
@@ -707,56 +726,3 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         if inCombat then HideChoice() else MaybeAsk() end
     end
 end)
-
----------------------------------------------------------------------------
--- Slash
----------------------------------------------------------------------------
-local function PrintStatus()
-    local build = ActiveBuild()
-    Print("build: " .. (OwnWay() and "your own way, no suggestions" or build and build.name or "none for your class"))
-    local talent = FindNextTalent()
-    if talent then
-        Print("next talent: |cffffd100" .. talent.name .. "|r (rank " .. (talent.rank + 1) .. "/" .. talent.maxRank .. "), shown below the talent window out of combat.")
-    else
-        Print("no talent to suggest right now.")
-    end
-    local glyph = (UnitCharacterPoints("player") or 0) <= 0 and FindNextGlyph()
-    if glyph then
-        Print("next glyph: |cffffd100" .. glyph.name .. "|r (" .. (glyph.major and "major" or "minor") .. ").")
-    end
-end
-
-local USAGE = "Usage: /sage (or /sg) build [name | own] | status | help"
-
-SLASH_SAGE1 = "/sage"
-SLASH_SAGE2 = "/sg"
-SlashCmdList["SAGE"] = function(msg)
-    msg = strlower(strtrim(msg or ""))
-    if msg == "build" or msg:find("^build ") then
-        local list = ns.builds[MY_CLASS]
-        local arg = strtrim(msg:sub(6))
-        if not list then
-            Print("no builds for your class yet.")
-        elseif arg == "" then
-            local names = {}
-            for _, b in ipairs(list) do names[#names + 1] = b.name end
-            Print("builds: " .. table.concat(names, ", ") .. ", own. Using " .. (ActiveBuild() and ActiveBuild().name or "none (own way)") .. ". /sage build <name> to pick one.")
-        elseif arg == OWN_WAY then
-            db.builds[Group()] = OWN_WAY
-            Refresh()
-            Print("no suggestions, you go your own way.")
-        elseif FindBuild(arg) then
-            db.builds[Group()] = arg
-            Print("build set to " .. FindBuild(arg).name .. ".")
-            CheckDeviation()
-            Refresh()
-        else
-            Print("unknown build '" .. arg .. "'. " .. USAGE)
-        end
-    elseif msg == "status" or msg == "" then
-        PrintStatus()
-        if msg == "" then Print(USAGE) end
-    else
-        Print(USAGE)
-    end
-end

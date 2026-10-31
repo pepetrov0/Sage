@@ -3,7 +3,7 @@
 ![WoW 3.3.5a (WotLK)](https://img.shields.io/badge/WoW-3.3.5a%20WotLK-a335ee?style=flat-square)
 ![Version](https://img.shields.io/badge/version-0.1.0-6f42c1?style=flat-square)
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Todo](#todo) • [FAQ](#faq)
+[Features](#features) • [Installation](#installation) • [How it works](#how-it-works) • [Todo](#todo) • [FAQ](#faq)
 
 The next talent to learn, always in sight.
 
@@ -14,7 +14,7 @@ The next talent to learn, always in sight.
 - 🎯 **Next talent at a glance**: icon, name and the rank you are about to learn
 - 🔮 **Glyph recommendations**: once your talent points are spent and a glyph socket is empty, a second card shows the next glyph from your spec's priority list (Retribution, Holy and Protection paladin so far)
 - 🪟 **Out of the way**: it only appears below the talent window, and never in combat
-- 🧭 **Asks which build you want** at level 10 and after a talent reset, and remembers it per talent group (dual spec). Until you pick one, you go your own way (no suggestions)
+- 🧭 **Asks which build you want** at level 10 and after a talent reset, and remembers it per talent group (dual spec). Close it without picking and it asks again the next time you open the talent window, up to 3 times. Until you pick one, you go your own way (no suggestions)
 - 🪶 **Featherweight**: a few small Lua files (the core, an optional ElvUI skin and the build data), no dependencies
 
 ## Installation
@@ -23,15 +23,6 @@ Sage targets the WoW 3.3.5a client (interface `30300`).
 
 1. Put the addon files inside a `Sage` folder in `Interface/AddOns`.
 2. Start the client and enable **Sage** in the AddOns list on the character selection screen (use `/reload` if you're already logged in).
-
-## Usage
-
-| Command | Description |
-| --- | --- |
-| `/sage build [name]` | List the builds for your class, or pick one (`own` for no suggestions) |
-| `/sage status` | Show your build and what it suggests now |
-
-`/sg` is a short alias for `/sage`.
 
 ## How it works
 
