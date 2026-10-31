@@ -15,11 +15,8 @@
      after you reset your talents. Dual spec: each talent group has its own pick, so switching
      groups follows that group's build, or asks (with the talent window open) if it has none.
 
-     /sage status   show what it is doing
-     /sage on|off   enable or disable
-     /sage build    list the builds for your class, /sage build <name> picks one
-     /sage log      toggle the chat message when the suggestion changes
-     /sage check    check the builds of your class against the talent trees
+     /sage (or /sg) build    list the builds for your class, build <name> or build own picks one
+     /sage (or /sg) status   show what it is doing
 
      File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events > Slash.
      The ElvUI skin is in Skin.lua.
@@ -29,7 +26,6 @@ local ADDON_NAME, ns = ...
 local _, MY_CLASS = UnitClass("player") -- never changes, so looked up once
 local db
 local suggestion -- the talent currently suggested, nil when there is none
-local lastLogged -- "tab:index" of the suggestion last reported in chat, so reopening the window stays quiet
 local talentFrame -- PlayerTalentFrame, once the client has loaded the talent UI
 local inCombat
 local talentsReady -- set on the first PLAYER_TALENT_UPDATE (or a while after login): before it, talent data can read wrong
@@ -41,17 +37,11 @@ local TAG = "|cff33ff99Sage|r"
 local ADDON_VERSION = GetAddOnMetadata(ADDON_NAME, "Version") or "?"
 local function Print(msg) DEFAULT_CHAT_FRAME:AddMessage(TAG .. " " .. tostring(msg)) end
 local function LogLoad(hint) Print("v" .. ADDON_VERSION .. " loaded." .. (hint and (" " .. hint) or "")) end
--- For changes the addon makes on its own; replies to commands use Print and are always shown.
-local function Log(msg) if db.chatLog then Print(msg) end end
-
-local function OnOff(v) return v and "|cff00ff00ON|r" or "|cffff0000OFF|r" end
 
 ---------------------------------------------------------------------------
 -- Data
 ---------------------------------------------------------------------------
 local defaults = {
-    enabled = true,
-    chatLog = true, -- report a changed suggestion in chat, see Log
     builds = {}, -- the chosen build name per talent group (dual spec)
 }
 
@@ -182,13 +172,21 @@ local function Deviation(build)
     return known and off or nil
 end
 
+StaticPopupDialogs["SAGE_OWN_WAY"] = {
+    text = "|cff33ff99Sage|r\n\n%s is not in the %s build, so you are on your own now.\n\nReset your talents to follow a build again.",
+    button1 = OKAY,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
 -- A player who spends a point the picked build never takes goes their own way from then on.
 local function CheckDeviation()
     local build = talentsReady and ActiveBuild()
     local off = build and Deviation(build)
     if not off then return end
     db.builds[Group()] = OWN_WAY
-    Print(off .. " is not in the " .. build.name .. " build, so you go your own way now. /sage build <name> follows a build again.")
+    StaticPopup_Show("SAGE_OWN_WAY", off, build.name)
 end
 
 ---------------------------------------------------------------------------
@@ -330,7 +328,7 @@ end
 
 -- Guidance is only offered with the talent window open and out of combat.
 local function Available()
-    return db.enabled and talentFrame and talentFrame:IsShown() and not inCombat
+    return talentFrame and talentFrame:IsShown() and not inCombat
 end
 
 -- Clicking the card learns the suggested talent; the client's talent update event refreshes it.
@@ -376,7 +374,6 @@ end
 -- on the list that is not socketed yet. Glyphs already socketed are never replaced.
 local GLYPH_MAJOR, GLYPH_MINOR = GLYPHTYPE_MAJOR or 1, GLYPHTYPE_MINOR or 2
 local glyphSuggestion
-local lastLoggedGlyph
 
 local function FindNextGlyph()
     local build = ActiveBuild()
@@ -446,11 +443,6 @@ local function RefreshGlyphs()
         link and DescribeItem(link) or "",
         "|cff888888Priority " .. g.priority .. " of " .. g.total .. "|r\n"
             .. (link and "|cff00ff00In your bags|r" or "|cffff4040Not in your bags|r"))
-
-    if g.name ~= lastLoggedGlyph then
-        lastLoggedGlyph = g.name
-        Log("Next glyph: |cffffd100" .. g.name .. "|r (" .. strlower(kind) .. ")")
-    end
 end
 
 -- Bags change in bursts (one BAG_UPDATE per bag), and only the shown glyph card cares, so this
@@ -474,12 +466,6 @@ local function Refresh()
             Describe(suggestion.tab, suggestion.index),
             (suggestion.build and ("|cff888888Build: " .. suggestion.build .. ", learned at level " .. suggestion.level .. "|r\n") or "")
                 .. "|cff00ff00Click to learn|r")
-
-        local key = suggestion.tab .. ":" .. suggestion.index
-        if key ~= lastLogged then
-            lastLogged = key
-            Log("Next talent: |cffffd100" .. suggestion.name .. "|r (rank " .. (suggestion.rank + 1) .. "/" .. suggestion.maxRank .. ")")
-        end
     end
     if GameTooltip:IsOwned(frame) then -- the tooltip under the cursor follows the card
         if suggestion then frame:GetScript("OnEnter")(frame) else GameTooltip:Hide() end
@@ -614,8 +600,8 @@ local function CheckReset()
     if total > 0 or allUnspent then lastSpent[group] = total end
 end
 
--- A dual spec switch: the dialog asked for the other group, so it goes; the new group's build is
--- announced, or it is asked for (MaybeAsk, after this).
+-- A dual spec switch: the dialog asked for the other group, so it goes; the new group is asked for
+-- its build if it has none (MaybeAsk, after this).
 local function CheckGroup()
     local group = Group()
     if group == lastGroup then return end
@@ -623,10 +609,6 @@ local function CheckGroup()
     lastGroup = group
     if first then return end -- login, nothing was switched
     HideChoice()
-    local pick = db.builds[group]
-    local build = pick and pick ~= OWN_WAY and FindBuild(pick)
-    Log("talent group " .. group .. ": " .. (pick == OWN_WAY and "your own way, no suggestions"
-        or build and ("build " .. build.name) or "no build chosen yet, your own way"))
 end
 
 -- Run whenever talents may have changed, once talent data can be trusted.
@@ -690,6 +672,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
             SageDB = SageDB or {}
             db = SageDB
             CopyDefaults(defaults, db)
+            db.enabled, db.chatLog = nil, nil -- settings of older versions
         elseif arg1 == "Blizzard_TalentUI" then
             Attach()
         end
@@ -730,7 +713,7 @@ end)
 ---------------------------------------------------------------------------
 local function PrintStatus()
     local build = ActiveBuild()
-    Print(OnOff(db.enabled) .. "  |  chat log " .. OnOff(db.chatLog) .. "  |  build: " .. (OwnWay() and "your own way, no suggestions" or build and build.name or "none for your class"))
+    Print("build: " .. (OwnWay() and "your own way, no suggestions" or build and build.name or "none for your class"))
     local talent = FindNextTalent()
     if talent then
         Print("next talent: |cffffd100" .. talent.name .. "|r (rank " .. (talent.rank + 1) .. "/" .. talent.maxRank .. "), shown below the talent window out of combat.")
@@ -743,72 +726,13 @@ local function PrintStatus()
     end
 end
 
--- Replays every build of the class one point per level, as the client would learn it, and reports
--- the steps it would refuse: unknown names, too many ranks, a locked tier or a missing prerequisite
--- (talents need their prerequisite maxed), and levels that do not run from 10 to 80 one point each.
-local MAX_LEVEL = 80
-local function CheckBuilds()
-    local list = ns.builds[MY_CLASS]
-    if not list then return Print("no builds for your class yet.") end
-    local byName, byPos = {}, {}
-    for name, entry in pairs(TalentIndex()) do
-        -- copied, so the cached index entries are not changed
-        local t = { tab = entry.tab, index = entry.index, tier = entry.tier, maxRank = entry.maxRank, name = name }
-        byName[name], byPos[t.tab .. ":" .. t.tier .. ":" .. entry.column] = t, t
-    end
-    for _, build in ipairs(list) do
-        local problems, rank, spent, level = {}, {}, {}, MIN_LEVEL
-        for n, step in ipairs(build.steps) do
-            local name, from, to = step[1], step[2], step[3]
-            local problem
-            if from ~= level or to < from then
-                problem = format("levels %d-%d, expected to start at %d", from, to, level)
-            end
-            level = max(to, from) + 1
-            local t = byName[name]
-            if not t then
-                problem = problem or "not a talent of your class (or another locale)"
-            else
-                local pTier, pColumn = GetTalentPrereqs(t.tab, t.index)
-                local prereq = pTier and byPos[t.tab .. ":" .. pTier .. ":" .. pColumn]
-                for lvl = from, to do
-                    local r = rank[name] or 0
-                    if r >= t.maxRank then
-                        problem = problem or format("more than %d ranks at level %d", t.maxRank, lvl)
-                    elseif (spent[t.tab] or 0) < (t.tier - 1) * 5 then
-                        problem = problem or format("tier %d is still locked at level %d (%d points in its tree)", t.tier, lvl, spent[t.tab] or 0)
-                    elseif prereq and (rank[prereq.name] or 0) < prereq.maxRank then
-                        problem = problem or format("needs %s maxed first (level %d)", prereq.name, lvl)
-                    end
-                    rank[name] = r + 1 -- counted anyway, so one bad step does not flag every later one
-                    spent[t.tab] = (spent[t.tab] or 0) + 1
-                end
-            end
-            if problem then problems[#problems + 1] = format("  step %d, %s: %s", n, name, problem) end
-        end
-        if level - 1 ~= MAX_LEVEL then
-            problems[#problems + 1] = format("  ends at level %d, expected %d", level - 1, MAX_LEVEL)
-        end
-        if #problems == 0 then
-            Print(build.name .. ": |cff00ff00ok|r")
-        else
-            Print(build.name .. ": |cffff4040" .. #problems .. " problem" .. (#problems > 1 and "s" or "") .. "|r")
-            for _, p in ipairs(problems) do Print(p) end
-        end
-    end
-end
+local USAGE = "Usage: /sage (or /sg) build [name | own] | status | help"
 
 SLASH_SAGE1 = "/sage"
+SLASH_SAGE2 = "/sg"
 SlashCmdList["SAGE"] = function(msg)
     msg = strlower(strtrim(msg or ""))
-    if msg == "on" or msg == "off" or msg == "toggle" then
-        if msg == "toggle" then db.enabled = not db.enabled else db.enabled = (msg == "on") end
-        Refresh()
-        Print(db.enabled and "enabled." or "disabled.")
-    elseif msg == "log" then
-        db.chatLog = not db.chatLog
-        Print("chat log " .. (db.chatLog and "on." or "off."))
-    elseif msg == "build" or msg:find("^build ") then
+    if msg == "build" or msg:find("^build ") then
         local list = ns.builds[MY_CLASS]
         local arg = strtrim(msg:sub(6))
         if not list then
@@ -827,14 +751,12 @@ SlashCmdList["SAGE"] = function(msg)
             CheckDeviation()
             Refresh()
         else
-            Print("unknown build '" .. arg .. "'.")
+            Print("unknown build '" .. arg .. "'. " .. USAGE)
         end
-    elseif msg == "check" then
-        CheckBuilds()
     elseif msg == "status" or msg == "" then
         PrintStatus()
-        if msg == "" then Print("Usage: /sage on | off | build | log | check | status") end
+        if msg == "" then Print(USAGE) end
     else
-        Print("Usage: /sage on | off | build | log | check | status")
+        Print(USAGE)
     end
 end
