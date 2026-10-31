@@ -417,14 +417,13 @@ local function RefreshGlyphs()
     end
 end
 
--- Bags change in bursts (one BAG_UPDATE per bag), and only the shown glyph card cares, so it
--- rescans them once, on its next frame.
-local bagsChanged
-glyphFrame:SetScript("OnUpdate", function()
-    if bagsChanged then
-        bagsChanged = false
-        RefreshGlyphs()
-    end
+-- Bags change in bursts (one BAG_UPDATE per bag), and only the shown glyph card cares, so this
+-- rescans them once, on the next frame, and then hides itself.
+local bagTimer = CreateFrame("Frame")
+bagTimer:Hide()
+bagTimer:SetScript("OnUpdate", function(self)
+    self:Hide()
+    RefreshGlyphs()
 end)
 
 local function Refresh()
@@ -648,6 +647,7 @@ frame:RegisterEvent("GLYPH_ADDED")
 frame:RegisterEvent("GLYPH_REMOVED")
 frame:RegisterEvent("GLYPH_UPDATED")
 frame:RegisterEvent("BAG_UPDATE")
+local GLYPH_EVENTS = { GLYPH_ADDED = true, GLYPH_REMOVED = true, GLYPH_UPDATED = true }
 frame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == ADDON_NAME then
@@ -673,12 +673,15 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         readyTimer:Show()
         LogLoad("Open the talent window (N) for suggestions. /sage for commands.")
     elseif event == "BAG_UPDATE" then
-        if glyphFrame:IsShown() then bagsChanged = true end -- see the glyph card's OnUpdate
-    elseif event:find("^GLYPH_") then
+        if glyphFrame:IsShown() then bagTimer:Show() end -- see bagTimer
+    elseif GLYPH_EVENTS[event] then
         Refresh()
+    elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+        -- combat cannot change talents, so no talent scan here
+        inCombat = (event == "PLAYER_REGEN_DISABLED")
+        Refresh()
+        if inCombat then HideChoice() else MaybeAsk() end
     else
-        if event == "PLAYER_REGEN_DISABLED" then inCombat = true end
-        if event == "PLAYER_REGEN_ENABLED" then inCombat = false end
         if event == "PLAYER_TALENT_UPDATE" then talentsReady = true end
         if talentsReady then CheckTalents() end -- the first run sets the baseline: lastGroup and lastSpent
         Refresh()
