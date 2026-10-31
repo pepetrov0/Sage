@@ -76,7 +76,8 @@ ns.builds = {}
 
 local function FindBuild(name)
     for _, b in ipairs(ns.builds[MY_CLASS] or {}) do
-        if strlower(b.name) == name then return b end
+        b.key = b.key or strlower(b.name) -- cached, as this runs several times per refresh
+        if b.key == name then return b end
     end
 end
 
@@ -109,33 +110,51 @@ local function ActiveBuild()
     return pick and pick ~= OWN_WAY and FindBuild(pick) or nil
 end
 
+-- Talent name -> { tab, index, tier, column, maxRank, icon }. None of it changes for a class, so it
+-- is built once. Talent data can read empty right after login: a partial index is returned but not
+-- kept, so the next call tries again.
+local talentIndex
+local function TalentIndex()
+    if talentIndex then return talentIndex end
+    local index, complete = {}, GetNumTalentTabs() > 0
+    for tab = 1, GetNumTalentTabs() do
+        for i = 1, GetNumTalents(tab) do
+            local name, icon, tier, column, _, maxRank = GetTalentInfo(tab, i)
+            if name then
+                index[name] = { tab = tab, index = i, tier = tier, column = column, maxRank = maxRank, icon = icon }
+            else
+                complete = false
+            end
+        end
+    end
+    if complete then talentIndex = index end
+    return index
+end
+
 -- The first step of the build whose talent is below the rank the build wants by then and can be
 -- learned now (not maxed, prerequisite learned, tier unlocked). Others are skipped, so a step that
 -- cannot be learned does not hold up the rest of the build.
 local function FindBuildTalent(build)
-    local group = Group()
-    local byName, spent = {}, {}
+    local group, index = Group(), TalentIndex()
+    local spent = {}
     for tab = 1, GetNumTalentTabs() do
         spent[tab] = select(3, GetTalentTabInfo(tab, false, false, group)) or 0
-        for i = 1, GetNumTalents(tab) do
-            local name, icon, tier, column, rank, maxRank, _, meetsPrereq = GetTalentInfo(tab, i, false, false, group)
-            if name then
-                byName[name] = { tab = tab, index = i, name = name, icon = icon, tier = tier, column = column, rank = rank, maxRank = maxRank, meetsPrereq = meetsPrereq }
-            end
-        end
     end
     local wanted = {}
     for _, step in ipairs(build.steps) do
         local name, from, to = step[1], step[2], step[3]
-        local talent = byName[name]
-        if talent then -- a name the client does not know (other locale) is skipped, not an error
+        local t = index[name]
+        if t then -- a name the client does not know (other locale) is skipped, not an error
             local before = wanted[name] or 0
             wanted[name] = before + (to - from + 1)
-            if talent.rank < wanted[name] and talent.rank < talent.maxRank and talent.meetsPrereq
-                and spent[talent.tab] >= (talent.tier - 1) * 5 then
-                talent.build = build.name
-                talent.level = from + max(talent.rank - before, 0) -- the level the build learns this rank at
-                return talent
+            -- only the rank and prerequisite change, so only they are read live
+            local _, _, _, _, rank, _, _, meetsPrereq = GetTalentInfo(t.tab, t.index, false, false, group)
+            if rank and rank < wanted[name] and rank < t.maxRank and meetsPrereq
+                and (spent[t.tab] or 0) >= (t.tier - 1) * 5 then
+                -- a fresh table, so the cached index entry is never handed out or changed
+                return { tab = t.tab, index = t.index, name = name, icon = t.icon, tier = t.tier, column = t.column,
+                    rank = rank, maxRank = t.maxRank, meetsPrereq = meetsPrereq, build = build.name,
+                    level = from + max(rank - before, 0) } -- the level the build learns this rank at
             end
         end
     end
@@ -144,8 +163,12 @@ end
 -- The first talent with more points than the build ever takes, nil when there is none. When the
 -- client knows none of the build's talent names (other locale), it cannot tell, so it says nil.
 local function Deviation(build)
-    local planned = {}
-    for _, step in ipairs(build.steps) do planned[step[1]] = (planned[step[1]] or 0) + (step[3] - step[2] + 1) end
+    local planned = build.planned -- name -> total ranks; build files load later, so it is made on first use
+    if not planned then
+        planned = {}
+        for _, step in ipairs(build.steps) do planned[step[1]] = (planned[step[1]] or 0) + (step[3] - step[2] + 1) end
+        build.planned = planned
+    end
     local group, known, off = Group(), false, nil
     for tab = 1, GetNumTalentTabs() do
         for i = 1, GetNumTalents(tab) do
@@ -715,15 +738,10 @@ local function CheckBuilds()
     local list = ns.builds[MY_CLASS]
     if not list then return Print("no builds for your class yet.") end
     local byName, byPos = {}, {}
-    for tab = 1, GetNumTalentTabs() do
-        for i = 1, GetNumTalents(tab) do
-            local name, _, tier, column, _, maxRank = GetTalentInfo(tab, i)
-            if name then
-                local t = { tab = tab, index = i, tier = tier, maxRank = maxRank }
-                byName[name], byPos[tab .. ":" .. tier .. ":" .. column] = t, t
-                t.name = name
-            end
-        end
+    for name, entry in pairs(TalentIndex()) do
+        -- copied, so the cached index entries are not changed
+        local t = { tab = entry.tab, index = entry.index, tier = entry.tier, maxRank = entry.maxRank, name = name }
+        byName[name], byPos[t.tab .. ":" .. t.tier .. ":" .. entry.column] = t, t
     end
     for _, build in ipairs(list) do
         local problems, rank, spent, level = {}, {}, {}, MIN_LEVEL
