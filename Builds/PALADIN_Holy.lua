@@ -34,11 +34,9 @@ table.insert(ns.builds.PALADIN, {
         { "Divinity", 61, 65 },
         { "Anticipation", 66, 68 },
         { "Guardian's Favor", 69, 70 },
-        { "Toughness", 71, 71 },
-        { "Divine Sacrifice", 72, 72 },
-        { "Benediction", 73, 75 },
-        { "Anticipation", 76, 77 },
-        { "Toughness", 78, 78 },
-        { "Divine Guardian", 79, 80 },
+        { "Divine Sacrifice", 71, 71 },
+        { "Toughness", 72, 75 },
+        { "Divine Guardian", 76, 77 },
+        { "Improved Devotion Aura", 78, 80 }
     },
 })
