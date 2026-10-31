@@ -1,7 +1,8 @@
 local ADDON_NAME, ns = ...
 
 -- Retribution paladin leveling build and glyphs. The talent steps run from level 10 (the first talent
--- point) to 80; the last four are Holy talents, which are found by name, so that is fine.
+-- point) to 80; the last five are from other trees (Divine Strength is Protection, the rest Holy),
+-- which is fine, as talents are found by name.
 
 ns.builds.PALADIN = ns.builds.PALADIN or {}
 table.insert(ns.builds.PALADIN, {
