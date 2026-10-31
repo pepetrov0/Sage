@@ -3,7 +3,7 @@
 ![WoW 3.3.5a (WotLK)](https://img.shields.io/badge/WoW-3.3.5a%20WotLK-a335ee?style=flat-square)
 ![Version](https://img.shields.io/badge/version-0.1.0-6f42c1?style=flat-square)
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [FAQ](#faq)
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Todo](#todo) • [FAQ](#faq)
 
 The next talent to learn, always in sight.
 
@@ -12,7 +12,7 @@ The next talent to learn, always in sight.
 ## Features
 
 - 🎯 **Next talent at a glance**: icon, name and the rank you are about to learn
-- 🔮 **Glyph recommendations**: once your talent points are spent and a glyph socket is empty, a second card shows the next glyph from your spec's priority list (Retribution and Holy paladin so far)
+- 🔮 **Glyph recommendations**: once your talent points are spent and a glyph socket is empty, a second card shows the next glyph from your spec's priority list (Retribution, Holy and Protection paladin so far)
 - 🔔 **Chat message when the suggestion changes**, which you can turn off with `/sage log`
 - 🪟 **Out of the way**: it only appears below the talent window, and never in combat
 - 🧭 **Asks which build you want** at level 10 and after a talent reset
@@ -42,6 +42,51 @@ Sage targets the WoW 3.3.5a client (interface `30300`).
 
 > [!NOTE]
 > This fills the tree in order. It does not know which talents are good for your spec yet.
+
+## Todo
+
+Leveling builds and glyphs, by class and spec:
+
+- [ ] Death Knight
+  - [ ] Blood
+  - [ ] Frost
+  - [ ] Unholy
+- [ ] Druid
+  - [ ] Balance
+  - [ ] Feral Combat
+  - [ ] Restoration
+- [ ] Hunter
+  - [ ] Beast Mastery
+  - [ ] Marksmanship
+  - [ ] Survival
+- [ ] Mage
+  - [ ] Arcane
+  - [ ] Fire
+  - [ ] Frost
+- [x] Paladin
+  - [x] Holy
+  - [x] Protection
+  - [x] Retribution
+- [ ] Priest
+  - [ ] Discipline
+  - [ ] Holy
+  - [ ] Shadow
+- [ ] Rogue
+  - [ ] Assassination
+  - [ ] Combat
+  - [ ] Subtlety
+- [ ] Shaman
+  - [ ] Elemental
+  - [ ] Enhancement
+  - [ ] Restoration
+- [ ] Warlock
+  - [ ] Affliction
+  - [ ] Demonology
+  - [ ] Destruction
+- [ ] Warrior
+  - [ ] Arms
+  - [ ] Fury
+  - [ ] Protection
 
 ## FAQ
 
