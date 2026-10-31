@@ -78,10 +78,14 @@ end
 
 local function Group() return GetActiveTalentGroup() or 1 end
 
+-- Stored as the build pick when the player wants no guidance at all.
+local OWN_WAY = "own"
+local function OwnWay() return db.builds[Group()] == OWN_WAY end
+
 -- The chosen build, else the one whose tree has the most points (the first on a fresh character).
 local function ActiveBuild()
     local list = ns.builds[MY_CLASS]
-    if not list then return nil end
+    if not list or OwnWay() then return nil end
     if db.builds[Group()] then
         local chosen = FindBuild(db.builds[Group()])
         if chosen then return chosen end
@@ -127,7 +131,7 @@ end
 
 -- Returns a table for the talent to learn next, or nil when there is nothing to spend or learn.
 local function FindNextTalent()
-    if (UnitCharacterPoints("player") or 0) <= 0 then return nil end
+    if (UnitCharacterPoints("player") or 0) <= 0 or OwnWay() then return nil end
 
     local build = ActiveBuild()
     local fromBuild = build and FindBuildTalent(build)
@@ -394,7 +398,7 @@ local hidingAuto -- the dialog is being closed by us (combat, window closed), wh
 local lastSpent = {} -- points spent per talent group at the last check, to spot a reset
 
 local CHOICE_PADDING = 14
-local OPTION_W, OPTION_H, OPTION_GAP = 110, 78, 10
+local OPTION_W, OPTION_H, OPTION_GAP = 90, 90, 10
 local OPTION_ICON = 40
 
 local choice = CreateFrame("Frame", "SageChoice", UIParent)
@@ -419,16 +423,16 @@ title:SetText("|cff33ff99Sage|r")
 
 local subtitle = choice:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 subtitle:SetPoint("TOP", title, "BOTTOM", 0, -4)
-subtitle:SetText("Choose your specialization and I will guide your talents.")
+subtitle:SetText("Choose your specialization and I will guide your talents, or go your own way.")
 
 choice.close = CreateFrame("Button", nil, choice, "UIPanelCloseButton")
 choice.close:SetPoint("TOPRIGHT", -2, -2)
 
 local function OnChoose(self)
-    db.builds[Group()] = strlower(self.build)
+    db.builds[Group()] = self.value
     choice:Hide()
     Refresh()
-    Print("build set to " .. self.build .. ".")
+    Print(self.value == OWN_WAY and "no suggestions, you go your own way." or ("build set to " .. self.build .. "."))
 end
 
 -- One option per build: a button with the tree's icon and the build name under it.
@@ -439,17 +443,22 @@ local function CreateOption()
 
     option.icon = option:CreateTexture(nil, "OVERLAY")
     option.icon:SetSize(OPTION_ICON, OPTION_ICON)
-    option.icon:SetPoint("TOP", 0, -10)
+    option.icon:SetPoint("CENTER", 0, 10) -- icon and label together are centered in the button
     option.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     option.label = option:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    option.label:SetPoint("TOP", option.icon, "BOTTOM", 0, -8)
+    option.label:SetPoint("TOP", option.icon, "BOTTOM", 0, -6)
+    option.label:SetJustifyH("CENTER")
     option.label:SetWidth(OPTION_W - 8)
     return option
 end
 
 local function ShowChoice()
-    local list = ns.builds[MY_CLASS]
+    local list = {}
+    for _, b in ipairs(ns.builds[MY_CLASS]) do
+        list[#list + 1] = { name = b.name, value = strlower(b.name), texture = select(2, GetTalentTabInfo(b.tab)) }
+    end
+    list[#list + 1] = { name = "My own way", value = OWN_WAY, texture = "Interface\\Icons\\INV_Misc_Map_01" }
     local width = #list * OPTION_W + (#list - 1) * OPTION_GAP
     for i, b in ipairs(list) do
         local option = choice.options[i]
@@ -459,7 +468,8 @@ local function ShowChoice()
             choice.options[i] = option
         end
         option.build = b.name
-        option.icon:SetTexture(select(2, GetTalentTabInfo(b.tab)))
+        option.value = b.value
+        option.icon:SetTexture(b.texture)
         option.label:SetText(b.name)
         option:ClearAllPoints()
         option:SetPoint("TOPLEFT", choice, "TOP", -width / 2 + (i - 1) * (OPTION_W + OPTION_GAP), -80)
@@ -568,7 +578,7 @@ end)
 ---------------------------------------------------------------------------
 local function PrintStatus()
     local build = ActiveBuild()
-    Print(OnOff(db.enabled) .. "  |  chat log " .. OnOff(db.chatLog) .. "  |  build: " .. (build and build.name or "none for your class"))
+    Print(OnOff(db.enabled) .. "  |  chat log " .. OnOff(db.chatLog) .. "  |  build: " .. (OwnWay() and "your own way, no suggestions" or build and build.name or "none for your class"))
     local talent = FindNextTalent()
     if talent then
         Print("next talent: |cffffd100" .. talent.name .. "|r (rank " .. (talent.rank + 1) .. "/" .. talent.maxRank .. "), shown below the talent window out of combat.")
@@ -599,7 +609,11 @@ SlashCmdList["SAGE"] = function(msg)
         elseif arg == "" then
             local names = {}
             for _, b in ipairs(list) do names[#names + 1] = b.name end
-            Print("builds: " .. table.concat(names, ", ") .. ". Using " .. ActiveBuild().name .. ". /sage build <name> to pick one.")
+            Print("builds: " .. table.concat(names, ", ") .. ", own. Using " .. (ActiveBuild() and ActiveBuild().name or "none (own way)") .. ". /sage build <name> to pick one.")
+        elseif arg == OWN_WAY then
+            db.builds[Group()] = OWN_WAY
+            Refresh()
+            Print("no suggestions, you go your own way.")
         elseif FindBuild(arg) then
             db.builds[Group()] = arg
             Refresh()
