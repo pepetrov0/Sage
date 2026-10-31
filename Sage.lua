@@ -17,9 +17,9 @@
      Dual spec: each talent group has its own pick, so switching groups follows that group's
      build, or asks (with the talent window open) if it has none.
 
-     There are no slash commands: the dialog picks the build.
+     /sage (or /sg) opens the build dialog, as a fallback when it does not come up by itself.
 
-     File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events.
+     File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events > Slash.
      The ElvUI skin is in Skin.lua.
 ]]
 
@@ -175,7 +175,7 @@ local function Deviation(build)
 end
 
 StaticPopupDialogs["SAGE_OWN_WAY"] = {
-    text = "|cff33ff99Sage|r\n\n%s is not in the %s build, so you are on your own now.\n\nReset your talents to follow a build again.",
+    text = "|cff33ff99Sage|r\n\n%s is not in the %s build, so you are on your own now.\n\nReset your talents to follow a build again.\n",
     button1 = OKAY,
     timeout = 0,
     whileDead = true,
@@ -183,7 +183,7 @@ StaticPopupDialogs["SAGE_OWN_WAY"] = {
 }
 
 StaticPopupDialogs["SAGE_NO_MORE_ASKS"] = {
-    text = "|cff33ff99Sage|r\n\nSage will no longer ask which build you want, so you are on your own.\n\nReset your talents to be asked again.",
+    text = "|cff33ff99Sage|r\n\nSage will no longer ask which build you want, so you are on your own.\n\nReset your talents to be asked again.\n",
     button1 = OKAY,
     timeout = 0,
     whileDead = true,
@@ -711,7 +711,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         MaybeAsk()
         readyTimer.left = READY_FALLBACK
         readyTimer:Show()
-        LogLoad("Open the talent window (N) for suggestions.")
+        LogLoad("Open the talent window (N) for suggestions. /sage to pick a build.")
     elseif event == "BAG_UPDATE" then
         if glyphFrame:IsShown() then bagTimer:Show() end -- see bagTimer
     elseif GLYPH_EVENTS[event] then
@@ -728,3 +728,23 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         if inCombat then HideChoice() else MaybeAsk() end
     end
 end)
+
+---------------------------------------------------------------------------
+-- Slash
+---------------------------------------------------------------------------
+-- A fallback for when the dialog does not come up by itself (closed too often, a missed reset).
+SLASH_SAGE1 = "/sage"
+SLASH_SAGE2 = "/sg"
+SlashCmdList["SAGE"] = function()
+    if not ns.builds[MY_CLASS] then
+        Print("no builds for your class yet.")
+    elseif UnitLevel("player") < MIN_LEVEL then
+        Print("talents start at level " .. MIN_LEVEL .. ".")
+    elseif inCombat then
+        Print("not in combat.")
+    elseif not choice:IsShown() then
+        db.dismissed[Group()] = nil -- asked for, so the dialog asks again as usual
+        closedGroup = nil
+        ShowChoice()
+    end
+end

@@ -3,7 +3,7 @@
 ![WoW 3.3.5a (WotLK)](https://img.shields.io/badge/WoW-3.3.5a%20WotLK-a335ee?style=flat-square)
 ![Version](https://img.shields.io/badge/version-0.1.0-6f42c1?style=flat-square)
 
-[Features](#features) • [Installation](#installation) • [How it works](#how-it-works) • [Todo](#todo) • [FAQ](#faq)
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Todo](#todo) • [FAQ](#faq)
 
 The next talent to learn, always in sight.
 
@@ -23,6 +23,14 @@ Sage targets the WoW 3.3.5a client (interface `30300`).
 
 1. Put the addon files inside a `Sage` folder in `Interface/AddOns`.
 2. Start the client and enable **Sage** in the AddOns list on the character selection screen (use `/reload` if you're already logged in).
+
+## Usage
+
+| Command | Description |
+| --- | --- |
+| `/sage` | Open the build dialog, if it did not come up by itself |
+
+`/sg` is a short alias for `/sage`.
 
 ## How it works
 
