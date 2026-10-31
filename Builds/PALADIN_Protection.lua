@@ -1,4 +1,6 @@
 local ADDON_NAME, ns = ...
+-- Only the player's class's builds are kept in memory.
+if select(2, UnitClass("player")) ~= "PALADIN" then return end
 
 -- Protection paladin leveling build and glyphs. The talent steps run from level 10 (the first talent
 -- point) to 80; the first seven are Retribution talents, which are found by name, so that is fine.

@@ -1,4 +1,6 @@
 local ADDON_NAME, ns = ...
+-- Only the player's class's builds are kept in memory.
+if select(2, UnitClass("player")) ~= "PALADIN" then return end
 
 -- Retribution paladin leveling build and glyphs. The talent steps run from level 10 (the first talent
 -- point) to 80; the last five are from other trees (Divine Strength is Protection, the rest Holy),

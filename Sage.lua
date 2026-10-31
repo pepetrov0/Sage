@@ -299,15 +299,28 @@ local glyphFrame = NewCard("SageGlyphFrame") -- the glyph card
 -- The description is not returned by GetTalentInfo, so it is read off the talent's tooltip.
 local scanner = CreateFrame("GameTooltip", "SageScanner", nil, "GameTooltipTemplate")
 
+-- The scanner's left lines, looked up once each; the tooltip adds lines as it needs them.
+local scannerLines = {}
+local function ScannerLine(i)
+    local line = scannerLines[i]
+    if not line then
+        line = _G["SageScannerTextLeft" .. i]
+        scannerLines[i] = line
+    end
+    return line
+end
+
+local lines = {} -- reused by Describe and DescribeItem
+
 local function Describe(tab, index)
     scanner:SetOwner(UIParent, "ANCHOR_NONE")
     scanner:SetTalent(tab, index)
-    local lines = {}
+    wipe(lines)
     for i = 3, scanner:NumLines() do -- line 1 is the name, line 2 the rank
-        local line = _G["SageScannerTextLeft" .. i]
+        local line = ScannerLine(i)
         local text = line and line:GetText()
         if text == (TOOLTIP_TALENT_NEXT_RANK or "Next rank:") then
-            lines = {} -- keep only what describes the rank about to be learned
+            wipe(lines) -- keep only what describes the rank about to be learned
         elseif text and text ~= "" and text ~= TOOLTIP_TALENT_LEARN and not text:find("^Requires") then
             lines[#lines + 1] = text
         end
@@ -404,9 +417,9 @@ end
 local function DescribeItem(link)
     scanner:SetOwner(UIParent, "ANCHOR_NONE")
     scanner:SetHyperlink(link)
-    local lines = {}
+    wipe(lines)
     for i = 2, scanner:NumLines() do -- line 1 is the name
-        local line = _G["SageScannerTextLeft" .. i]
+        local line = ScannerLine(i)
         local text = line and line:GetText()
         if text and text ~= "" and not text:find("^Requires") then lines[#lines + 1] = text end
     end
