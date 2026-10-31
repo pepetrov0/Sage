@@ -6,6 +6,9 @@
      in the tree where you have spent the most points and takes the first
      unlocked talent that is not maxed, top tier and leftmost column first.
 
+     Once no talent point is left to spend, and a glyph socket is empty, it also shows a card for the next glyph
+     from the active build's priority list (glyphs in Builds\CLASS_Spec.lua).
+
      At level 10 and above, with the talent window open and out of combat, it
      asks which build you want if you have not picked one, and asks again
      after you reset your talents. Dual spec: each talent group has its own pick.
@@ -15,7 +18,7 @@
      /sage build    list the builds for your class, /sage build <name> picks one
      /sage log      toggle the chat message when the suggestion changes
 
-     File layout: Logging > Data > Builds > Suggestion > UI > Choice > Events > Slash.
+     File layout: Logging > Data > Builds > Suggestion > UI > Glyphs > Choice > Events > Slash.
      The ElvUI skin is in Skin.lua.
 ]]
 
@@ -162,44 +165,66 @@ local function Skin(kind, ...)
     end
 end
 
--- The card sits below the talent window, see Place.
+-- The cards sit below the talent window, see PlaceCard.
 local PADDING = 8
 local ICON_SIZE = 36
-local frame = CreateFrame("Frame", "SageFrame", UIParent)
-frame:SetSize(300, 100)
-frame:SetPoint("TOP", UIParent, "TOP", 0, -120)
-frame:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 12,
-    insets = { left = 3, right = 3, top = 3, bottom = 3 },
-})
-frame:SetBackdropColor(0, 0, 0, 0.8)
-frame:Hide()
 
-local icon = frame:CreateTexture(nil, "ARTWORK")
-icon:SetSize(ICON_SIZE, ICON_SIZE)
-icon:SetPoint("TOPLEFT", PADDING, -PADDING)
-icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+local function NewCard(name)
+    local card = CreateFrame("Frame", name, UIParent)
+    card:SetSize(300, 100)
+    card:SetPoint("TOP", UIParent, "TOP", 0, -120)
+    card:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    card:SetBackdropColor(0, 0, 0, 0.8)
+    card:Hide()
 
-local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
-title:SetPoint("RIGHT", -PADDING, 0)
-title:SetJustifyH("LEFT")
+    card.icon = card:CreateTexture(nil, "ARTWORK")
+    card.icon:SetSize(ICON_SIZE, ICON_SIZE)
+    card.icon:SetPoint("TOPLEFT", PADDING, -PADDING)
+    card.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
-local rankText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-rankText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-rankText:SetPoint("RIGHT", -PADDING, 0)
-rankText:SetJustifyH("LEFT")
+    card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    card.title:SetPoint("TOPLEFT", card.icon, "TOPRIGHT", 6, -2)
+    card.title:SetPoint("RIGHT", -PADDING, 0)
+    card.title:SetJustifyH("LEFT")
 
-local description = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-description:SetPoint("TOPLEFT", icon, "BOTTOMLEFT", 0, -6)
-description:SetJustifyH("LEFT")
-description:SetJustifyV("TOP")
+    card.sub = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.sub:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -3)
+    card.sub:SetPoint("RIGHT", -PADDING, 0)
+    card.sub:SetJustifyH("LEFT")
 
-local footer = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-footer:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -6)
-footer:SetJustifyH("LEFT")
+    card.description = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.description:SetPoint("TOPLEFT", card.icon, "BOTTOMLEFT", 0, -6)
+    card.description:SetJustifyH("LEFT")
+    card.description:SetJustifyV("TOP")
+
+    card.footer = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.footer:SetPoint("TOPLEFT", card.description, "BOTTOMLEFT", 0, -6)
+    card.footer:SetJustifyH("LEFT")
+    return card
+end
+
+-- Fills a card and sizes it to fit; the width is set by PlaceCard.
+local function FillCard(card, texture, titleText, subText, descriptionText, footerText)
+    local width = card:GetWidth() - 2 * PADDING
+    card.icon:SetTexture(texture)
+    card.title:SetText(titleText)
+    card.sub:SetText(subText)
+    card.description:SetWidth(width)
+    card.description:SetText(descriptionText)
+    card.footer:SetWidth(width)
+    card.footer:SetText(footerText)
+    card:SetHeight(PADDING + ICON_SIZE + 6 + card.description:GetStringHeight() + 6 + card.footer:GetStringHeight() + PADDING)
+    card:Show()
+end
+
+local frame = NewCard("SageFrame") -- the talent card
+local icon = frame.icon
+local glyphFrame = NewCard("SageGlyphFrame") -- the glyph card
 
 -- The description is not returned by GetTalentInfo, so it is read off the talent's tooltip.
 local scanner = CreateFrame("GameTooltip", "SageScanner", nil, "GameTooltipTemplate")
@@ -235,48 +260,129 @@ end)
 
 -- The window's own frame is bigger than its visible panel: it reaches below it and past its right
 -- edge, which the client marks with hit rect insets. The tab buttons sit right under the panel, so
--- the card hangs under the first tab and is as wide as the panel (the frame minus those insets).
-local function Place()
+-- a card hangs under the first tab (or under the card above it) and is as wide as the panel (the
+-- frame minus those insets).
+local function PlaceCard(card, above)
     local left, right = talentFrame:GetHitRectInsets()
-    local width = max(talentFrame:GetWidth() - (left or 0) - (right or 0), 240)
-    local tab = _G["PlayerTalentFrameTab1"]
-    frame:ClearAllPoints()
-    if tab and tab:GetLeft() then
-        frame:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, -6)
+    card:ClearAllPoints()
+    if above then
+        card:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -4)
     else
-        frame:SetPoint("TOPLEFT", talentFrame, "BOTTOMLEFT", left or 0, -6)
+        local tab = _G["PlayerTalentFrameTab1"]
+        if tab and tab:GetLeft() then
+            card:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, -6)
+        else
+            card:SetPoint("TOPLEFT", talentFrame, "BOTTOMLEFT", left or 0, -6)
+        end
     end
-    frame:SetWidth(width)
+    card:SetWidth(max(talentFrame:GetWidth() - (left or 0) - (right or 0), 240))
+end
+
+---------------------------------------------------------------------------
+-- Glyphs
+---------------------------------------------------------------------------
+-- A build can carry glyphs = { major = { names... }, minor = { names... } }, most wanted first, so
+-- they follow the spec. A glyph is recommended whenever a socket of its kind is empty: the first one
+-- on the list that is not socketed yet. Glyphs already socketed are never replaced.
+local GLYPH_MAJOR, GLYPH_MINOR = GLYPHTYPE_MAJOR or 1, GLYPHTYPE_MINOR or 2
+local glyphSuggestion
+local lastLoggedGlyph
+
+local function FindNextGlyph()
+    local build = ActiveBuild()
+    local list = build and build.glyphs
+    if not list then return nil end
+
+    local socketed, emptyKinds = {}, {}
+    for socket = 1, GetNumGlyphSockets() do
+        local enabled, kind, spellID = GetGlyphSocketInfo(socket, Group())
+        if enabled then
+            local name = spellID and GetSpellInfo(spellID) -- the glyph's spell is named like the glyph
+            if name then socketed[name] = true elseif not spellID then emptyKinds[kind] = true end
+        end
+    end
+
+    for _, kind in ipairs({ GLYPH_MAJOR, GLYPH_MINOR }) do
+        local names = list[kind == GLYPH_MAJOR and "major" or "minor"] or {}
+        if emptyKinds[kind] then
+            for priority, name in ipairs(names) do
+                if not socketed[name] then
+                    return { name = name, major = (kind == GLYPH_MAJOR), priority = priority, total = #names }
+                end
+            end
+        end
+    end
+end
+
+-- The glyph's item link when it is in the bags, so the card can say whether it is at hand.
+local function FindInBags(name)
+    for bag = 0, NUM_BAG_SLOTS do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if link and link:find("[" .. name .. "]", 1, true) then return link end
+        end
+    end
+end
+
+local function DescribeItem(link)
+    scanner:SetOwner(UIParent, "ANCHOR_NONE")
+    scanner:SetHyperlink(link)
+    local lines = {}
+    for i = 2, scanner:NumLines() do -- line 1 is the name
+        local line = _G["SageScannerTextLeft" .. i]
+        local text = line and line:GetText()
+        if text and text ~= "" and not text:find("^Requires") then lines[#lines + 1] = text end
+    end
+    return table.concat(lines, "\n")
+end
+
+local function RefreshGlyphs()
+    -- talents come first: glyphs are only offered once there is no talent point left to spend
+    glyphSuggestion = Available() and (UnitCharacterPoints("player") or 0) <= 0 and FindNextGlyph() or nil
+    if not glyphSuggestion then
+        glyphFrame:Hide()
+        return
+    end
+    local g = glyphSuggestion
+    local kind = g.major and "Major" or "Minor"
+    local link = FindInBags(g.name)
+    local texture = link and select(10, GetItemInfo(link))
+        or ("Interface\\Icons\\INV_Glyph_" .. kind .. strupper(MY_CLASS:sub(1, 1)) .. strlower(MY_CLASS:sub(2)))
+
+    PlaceCard(glyphFrame, frame:IsShown() and frame or nil)
+    FillCard(glyphFrame, texture,
+        "|cff33ff99Next glyph:|r |cffffd100" .. g.name .. "|r",
+        kind .. " glyph  |cff888888empty slot|r",
+        link and DescribeItem(link) or "",
+        "|cff888888Priority " .. g.priority .. " of " .. g.total .. "|r\n"
+            .. (link and "|cff00ff00In your bags|r" or "|cffff4040Not in your bags|r"))
+
+    if g.name ~= lastLoggedGlyph then
+        lastLoggedGlyph = g.name
+        Log("Next glyph: |cffffd100" .. g.name .. "|r (" .. strlower(kind) .. ")")
+    end
 end
 
 local function Refresh()
     suggestion = Available() and FindNextTalent() or nil
     if not suggestion then
         frame:Hide()
-        return
+    else
+        PlaceCard(frame)
+        FillCard(frame, suggestion.icon,
+            "|cff33ff99Next to learn:|r |cffffd100" .. suggestion.name .. "|r",
+            format("Rank %d/%d  |cff888888%s, tier %d|r", suggestion.rank + 1, suggestion.maxRank, GetTalentTabInfo(suggestion.tab), suggestion.tier),
+            Describe(suggestion.tab, suggestion.index),
+            (suggestion.build and ("|cff888888Build: " .. suggestion.build .. ", learned at level " .. suggestion.level .. "|r\n") or "")
+                .. "|cff00ff00Click to learn|r")
+
+        local key = suggestion.tab .. ":" .. suggestion.index
+        if key ~= lastLogged then
+            lastLogged = key
+            Log("Next talent: |cffffd100" .. suggestion.name .. "|r (rank " .. (suggestion.rank + 1) .. "/" .. suggestion.maxRank .. ")")
+        end
     end
-    Place()
-    local width = frame:GetWidth() - 2 * PADDING
-    local treeName = GetTalentTabInfo(suggestion.tab)
-
-    icon:SetTexture(suggestion.icon)
-    title:SetFormattedText("|cff33ff99Next to learn:|r |cffffd100%s|r", suggestion.name)
-    rankText:SetFormattedText("Rank %d/%d  |cff888888%s, tier %d|r", suggestion.rank + 1, suggestion.maxRank, treeName, suggestion.tier)
-    description:SetWidth(width)
-    description:SetText(Describe(suggestion.tab, suggestion.index))
-    footer:SetWidth(width)
-    footer:SetText((suggestion.build and ("|cff888888Build: " .. suggestion.build .. ", learned at level " .. suggestion.level .. "|r\n") or "")
-        .. "|cff00ff00Click to learn|r")
-
-    local height = PADDING + ICON_SIZE + 6 + description:GetStringHeight() + 6 + footer:GetStringHeight() + PADDING
-    frame:SetHeight(height)
-    frame:Show()
-
-    local key = suggestion.tab .. ":" .. suggestion.index
-    if key ~= lastLogged then
-        lastLogged = key
-        Log("Next talent: |cffffd100" .. suggestion.name .. "|r (rank " .. (suggestion.rank + 1) .. "/" .. suggestion.maxRank .. ")")
-    end
+    RefreshGlyphs() -- after the talent card, as it hangs under it
 end
 
 ---------------------------------------------------------------------------
@@ -419,6 +525,10 @@ frame:RegisterEvent("CHARACTER_POINTS_CHANGED")
 frame:RegisterEvent("PLAYER_TALENT_UPDATE")
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+frame:RegisterEvent("GLYPH_ADDED")
+frame:RegisterEvent("GLYPH_REMOVED")
+frame:RegisterEvent("GLYPH_UPDATED")
+frame:RegisterEvent("BAG_UPDATE")
 frame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == ADDON_NAME then
@@ -434,12 +544,16 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         -- skinned at login, not at load: ElvUI finishes setting itself up first
         Skin("panel", frame)
         Skin("icon", icon)
+        Skin("panel", glyphFrame)
+        Skin("icon", glyphFrame.icon)
         Skin("panel", choice)
         Skin("close", choice.close)
         CheckReset()
         Refresh()
         MaybeAsk()
         LogLoad("Open the talent window (N) for suggestions. /sage for commands.")
+    elseif event == "BAG_UPDATE" or event:find("^GLYPH_") then
+        Refresh()
     else
         if event == "PLAYER_REGEN_DISABLED" then inCombat = true end
         if event == "PLAYER_REGEN_ENABLED" then inCombat = false end
@@ -460,6 +574,10 @@ local function PrintStatus()
         Print("next talent: |cffffd100" .. talent.name .. "|r (rank " .. (talent.rank + 1) .. "/" .. talent.maxRank .. "), shown below the talent window out of combat.")
     else
         Print("no talent to suggest right now.")
+    end
+    local glyph = (UnitCharacterPoints("player") or 0) <= 0 and FindNextGlyph()
+    if glyph then
+        Print("next glyph: |cffffd100" .. glyph.name .. "|r (" .. (glyph.major and "major" or "minor") .. ").")
     end
 end
 

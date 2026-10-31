@@ -1,12 +1,17 @@
 local ADDON_NAME, ns = ...
 
--- Retribution paladin leveling build, from level 10 (the first talent point) to 80. The last four
--- steps are Holy talents; they are found by name, so that is fine.
+-- Retribution paladin leveling build and glyphs. The talent steps run from level 10 (the first talent
+-- point) to 80; the last four are Holy talents, which are found by name, so that is fine.
 
 ns.builds.PALADIN = ns.builds.PALADIN or {}
 table.insert(ns.builds.PALADIN, {
     name = "Retribution",
     tab = 3,
+    -- most wanted first
+    glyphs = {
+        major = { "Glyph of Judgement", "Glyph of Exorcism", "Glyph of Seal of Vengeance" },
+        minor = { "Glyph of Blessing of Kings", "Glyph of Sense Undead", "Glyph of Lay on Hands" },
+    },
     steps = {
         { "Benediction", 10, 14 },
         { "Improved Blessing of Might", 15, 16 },

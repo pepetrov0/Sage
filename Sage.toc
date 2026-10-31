@@ -9,3 +9,4 @@
 Sage.lua
 Skin.lua
 Builds\PALADIN_Retribution.lua
+Builds\PALADIN_Holy.lua

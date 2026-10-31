@@ -12,6 +12,7 @@ The next talent to learn, always in sight.
 ## Features
 
 - 🎯 **Next talent at a glance**: icon, name and the rank you are about to learn
+- 🔮 **Glyph recommendations**: once your talent points are spent and a glyph socket is empty, a second card shows the next glyph from your spec's priority list (Retribution and Holy paladin so far)
 - 🔔 **Chat message when the suggestion changes**, which you can turn off with `/sage log`
 - 🪟 **Out of the way**: it only appears below the talent window, and never in combat
 - 🧭 **Asks which build you want** at level 10 and after a talent reset
