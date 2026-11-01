@@ -3,9 +3,8 @@
      talent to learn next in a card below it (name, rank, description), as
      long as you have unspent talent points. It follows the build you picked for your class
      (Builds\CLASS_Spec.lua). Without a pick you go your own way (no suggestions), and spending a
-     point the build never takes switches you to your own way too. A class with no builds yet,
-     or a finished build, gets the tree where you have spent the most points filled in order:
-     the first unlocked talent that is not maxed, top tier and leftmost column first.
+     point the build never takes switches you to your own way too. A class with no builds yet
+     gets no suggestions.
 
      Once no talent point is left to spend, and a glyph socket is empty, it also shows a card for the next glyph
      from the active build's priority list (glyphs in Builds\CLASS_Spec.lua).
@@ -87,12 +86,6 @@ local function Pick()
         return nil
     end
     return pick
-end
-
--- No guidance: the player picked their own way, or has not picked a build of their class (the default).
-local function OwnWay()
-    local pick = Pick()
-    return pick == OWN_WAY or (pick == nil and ns.builds[MY_CLASS] ~= nil)
 end
 
 -- The picked build, nil when there is none.
@@ -195,29 +188,12 @@ end
 ---------------------------------------------------------------------------
 
 -- Returns a table for the talent to learn next, or nil when there is nothing to spend or learn.
+-- Only a picked build suggests anything: without one (own way, or no build for the class) a guess
+-- would be presented as advice it is not.
 local function FindNextTalent()
-    if (UnitCharacterPoints("player") or 0) <= 0 or OwnWay() then return nil end
-
+    if (UnitCharacterPoints("player") or 0) <= 0 then return nil end
     local build = ActiveBuild()
-    local fromBuild = build and FindBuildTalent(build)
-    if fromBuild then return fromBuild end
-
-    local tab, spent = 1, -1
-    for i = 1, GetNumTalentTabs() do
-        local _, _, points = GetTalentTabInfo(i)
-        if points > spent then tab, spent = i, points end
-    end
-
-    local pick
-    for i = 1, GetNumTalents(tab) do
-        local name, icon, tier, column, rank, maxRank, _, meetsPrereq = GetTalentInfo(tab, i)
-        -- a tier unlocks after 5 points in its tree per tier above it
-        if name and rank < maxRank and meetsPrereq and spent >= (tier - 1) * 5
-            and (not pick or tier < pick.tier or (tier == pick.tier and column < pick.column)) then
-            pick = { tab = tab, index = i, name = name, icon = icon, tier = tier, column = column, rank = rank, maxRank = maxRank }
-        end
-    end
-    return pick
+    return build and FindBuildTalent(build)
 end
 
 ---------------------------------------------------------------------------
@@ -682,7 +658,8 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         MaybeAsk()
         readyTimer.left = READY_FALLBACK
         readyTimer:Show()
-        LogLoad("Open the talent window (N) for suggestions. /sage to pick a build.")
+        LogLoad(ns.builds[MY_CLASS] and "Open the talent window (N) for suggestions. /sage to pick a build."
+            or "No builds for your class yet, so no suggestions.")
     elseif event == "BAG_UPDATE" then
         if glyphFrame:IsShown() then bagTimer:Show() end -- see bagTimer
     elseif GLYPH_EVENTS[event] then

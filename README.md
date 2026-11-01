@@ -36,11 +36,11 @@ Sage targets the WoW 3.3.5a client (interface `30300`).
 
 1. It follows the leveling build you picked (in `Builds/`). It suggests the first step of the build you have not learned yet, skipping any step that cannot be learned right now.
 2. Without a pick you go your own way: no suggestions. If you spend a point in a talent your build never takes (or more ranks than it takes), Sage switches you to your own way and tells you in a dialog. To follow a build again, reset your talents and Sage asks you again.
-3. Without a build for your class, or once the build is done, it stays in the tree where you have spent the most points and takes the first talent that is not maxed, has its prerequisite learned and its tier unlocked (5 points per tier above it), top tier and leftmost column first.
+3. Without a build for your class it suggests nothing: a guess would look like advice it is not.
 4. It re-checks on level-up and whenever your talents change.
 
 > [!NOTE]
-> Builds exist only for paladins so far (see [Todo](#todo)). Other classes get the tree filled in order, which does not know which talents are good for your spec.
+> Builds exist only for paladins so far (see [Todo](#todo)). Other classes get no suggestions yet.
 
 ## Todo
 
